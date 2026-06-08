@@ -26,7 +26,7 @@ void extractLfo(Tremolo& tremolo, juce::AudioBuffer<float>& bufferToUse) {
  */
 TEST(Tremolo, ExtractLfo) {
   for (const auto lfoWaveform :
-       {Tremolo::LfoWaveform::sine, Tremolo::LfoWaveform::triangle}) {
+       {Tremolo::LfoWaveform::sine, Tremolo::LfoWaveform::triangle, Tremolo::LfoWaveform::square, Tremolo::LfoWaveform::saw}) {
     Tremolo testee;
     constexpr auto sampleRate = 48000.0;
     testee.setLfoWaveform(lfoWaveform);
@@ -37,9 +37,30 @@ TEST(Tremolo, ExtractLfo) {
 
     extractLfo(testee, buffer);
 
-    const auto* const fileName = lfoWaveform == Tremolo::LfoWaveform::sine
-                                     ? "sineLfo.wav"
-                                     : "triangleLfo.wav";
+//    const auto* const fileName = lfoWaveform == Tremolo::LfoWaveform::sine
+//                                     ? "sineLfo.wav"
+//                                     : "triangleLfo.wav";
+
+    const char* fileName = nullptr;
+
+    switch (lfoWaveform)
+    {
+      case Tremolo::LfoWaveform::sine:
+        fileName = "sineLfo.wav";
+        break;
+      case Tremolo::LfoWaveform::triangle:
+        fileName = "triangleLfo.wav";
+        break;
+      case Tremolo::LfoWaveform::square:
+        fileName = "squareLfo.wav";
+        break;
+      case Tremolo::LfoWaveform::saw:
+        fileName = "sawLfo.wav";
+        break;
+    }
+
+    //DBG("square index = " + juce::String((int) juce::toUnderlyingType(Tremolo::LfoWaveform::square)));
+    //DBG("saw index = " + juce::String((int) juce::toUnderlyingType(Tremolo::LfoWaveform::saw)));
 
     wolfsound::WavFileWriter::writeToFile(
         getFileOutputPath(fileName),
