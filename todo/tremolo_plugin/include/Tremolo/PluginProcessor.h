@@ -36,6 +36,8 @@ public:
 private:
   // TODO: add parameters
 
+  Parameters parameters{*this};
+
   Tremolo tremolo;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
