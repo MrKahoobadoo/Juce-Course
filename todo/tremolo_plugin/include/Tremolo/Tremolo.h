@@ -1,16 +1,15 @@
 #pragma once
 
 namespace tremolo {
+    enum class ApplySmoothing { no, yes };
+
 class Tremolo {
 public:
     enum class LfoWaveform : size_t {
         sine = 0, triangle = 1, square = 2, saw = 3
     };
-  Tremolo() {
-    for (auto& lfo : lfos) {
-      lfo.setFrequency(5.f /* hz */, true);
-    }
-  }
+  Tremolo() { setModulationRateHz(5.f, ApplySmoothing::no); }
+
   void prepare(double sampleRate, int expectedMaxFramesPerBlock) {
     const juce::dsp::ProcessSpec processSpec {
       .sampleRate = sampleRate,
@@ -20,12 +19,26 @@ public:
     for (auto& lfo : lfos) {
       lfo.prepare(processSpec);
     }
+
+    lfoTransitionSmoother.reset(sampleRate, 0.025);
   }
 
-  void setLfoWaveform(LfoWaveform waveform) {
+  void setModulationRateHz(float rateHz, ApplySmoothing applySmoothing = ApplySmoothing::yes) noexcept {
+    const auto force = applySmoothing == ApplySmoothing::no;
+    for (auto& lfo : lfos) {
+      lfo.setFrequency(rateHz, force);
+    }
+  }
+
+
+  void setLfoWaveform(LfoWaveform waveform, ApplySmoothing applySmoothing = ApplySmoothing::yes) {
     jassert(waveform == LfoWaveform::sine || waveform == LfoWaveform::triangle || waveform == LfoWaveform::square || waveform == LfoWaveform::saw);
 
     lfoToSet = waveform;
+
+    if (applySmoothing == ApplySmoothing::no) {
+      currentLfo = waveform;
+    }
   }
 
   void process(juce::AudioBuffer<float>& buffer) noexcept {
@@ -36,7 +49,7 @@ public:
 
       float lfoValue = getNextLfoValue();
 
-      float lfoSquare = 0.f;
+      auto lfoSquare = 0.f;
       if (lfoValue > 0) {
         lfoSquare = 1.f;
       } else {
@@ -76,8 +89,11 @@ private:
   // You should put class members and private functions here
 
   float getNextLfoValue() {
-    return lfos[juce::toUnderlyingType(currentLfo)].processSample(0.f);
+    if (lfoTransitionSmoother.isSmoothing()) {
+      return lfoTransitionSmoother.getNextValue();
+    }
 
+    return lfos[juce::toUnderlyingType(currentLfo)].processSample(0.f);
   }
 
   static float triangle(float phase) {
@@ -99,9 +115,13 @@ private:
   }
 
   void updateLfoWaveform() {
-    if (currentLfo != lfoToSet) {
-      currentLfo = lfoToSet;
-    }
+      if (currentLfo != lfoToSet) {
+        lfoTransitionSmoother.setCurrentAndTargetValue(getNextLfoValue());
+
+        currentLfo = lfoToSet;
+
+        lfoTransitionSmoother.setTargetValue(getNextLfoValue());
+      }
   }
 
   std::array<juce::dsp::Oscillator<float>, 4u> lfos
@@ -115,5 +135,8 @@ private:
 
   LfoWaveform currentLfo = LfoWaveform::sine;
   LfoWaveform lfoToSet = currentLfo;
+
+  juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> lfoTransitionSmoother{0.f};
+
 };
 }  // namespace tremolo
