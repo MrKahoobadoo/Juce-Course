@@ -10,8 +10,8 @@ public:
     };
 
   Tremolo() {
-    setModulationRateHz(5.f, ApplySmoothing::no);
-    setGlobalGaindB(1.f);
+    setModulationRateHz(5.f, ApplySmoothing::no),
+    currentGain = 1.f, currentDepth = 0.4f;
   }
 
   void prepare(double sampleRate, int expectedMaxFramesPerBlock) {
@@ -35,10 +35,20 @@ public:
     }
   }
 
-  void setGlobalGaindB(float dB) noexcept {
-      globalGain = juce::Decibels::decibelsToGain(dB);
+  void setGainToSet(float dB) noexcept {
+      globalGainToSet = juce::Decibels::decibelsToGain(dB);
   }
 
+  void setDepthToSet(float depth) noexcept {
+      globalDepthToSet = depth;
+  }
+
+//  void hardSetParams(float gain, float depth) {
+//    gainValue = gain;
+//    currentGain = gain;
+//    depthValue = depth;
+//    currentDepth = depth;
+//  }
 
   void setLfoWaveform(LfoWaveform waveform, ApplySmoothing applySmoothing = ApplySmoothing::yes) {
     jassert(waveform == LfoWaveform::sine || waveform == LfoWaveform::triangle || waveform == LfoWaveform::square || waveform == LfoWaveform::saw);
@@ -52,18 +62,22 @@ public:
 
   void process(juce::AudioBuffer<float>& buffer) noexcept {
     updateLfoWaveform();
-    //updateGlobalGain();
+
+
+    updateParameterSmoothing(gainTransitionSmoother, currentGain, globalGainToSet);
+    updateParameterSmoothing(depthTransitionSmoother, currentDepth, globalDepthToSet);
 
     // for each frame
     for (const auto frameIndex : std::views::iota(0, buffer.getNumSamples())) {
       //const auto bug = lfo.processSample(0.f);
 
-      const float lfoValue = getNextLfoValue();
-
-      constexpr auto modulationDepth = 0.4f;
+      const auto lfoValue = getNextLfoValue();
+      //std::cout << lfoValue << std::endl;
+      gainValue = gainTransitionSmoother.getNextValue();
+      depthValue = depthTransitionSmoother.getNextValue();
 
       // starts at gain = 1, then oscillates above and below
-      const auto modulationValue = lfoValue * modulationDepth + 1.f;
+      const auto modulationValue = lfoValue * depthValue + 1.f;
 
       // for cosine wave and ensuring max gain = 1
       // const auto modulationValue = 1.f - (lfoValue + 1.f) * modulationDepth / 2.f;
@@ -76,7 +90,7 @@ public:
         // get the input sample
         const auto inputSample = buffer.getSample(channelIndex, frameIndex);
 
-        const auto outputSample = inputSample * modulationValue * globalGain;//gainTransitionSmoother.getNextValue();
+        const auto outputSample = inputSample * modulationValue * gainValue;
 
         // set the output sample
         buffer.setSample(channelIndex, frameIndex, outputSample);
@@ -107,38 +121,60 @@ private:
   }
 
   static float square(float phase) {
-    const auto bug = std::sin(phase);
-    if (bug > 0) {
-      return 1.f;
+    //const auto ft = phase / juce::MathConstants<float>::twoPi;
+    float val = 0.f;
+    const float slideDur = 0.05f;
+    if (phase <= -slideDur) {
+      val = 0.f;
+    } else if (phase <= 0) {
+      val = (slideDur + phase) / slideDur;
+    } else if (phase >= (juce::MathConstants<float>::pi - slideDur)) {
+      val = (juce::MathConstants<float>::pi - phase) / slideDur;
     } else {
-      return -1.f;
+      val = 1.f;
     }
+
+    val = 2.f * (val - 0.5f);
+    //std::cout << val << std::endl;
+    return val;
   }
 
   static float saw(float phase) {
-    return -phase / juce::MathConstants<float>::twoPi * 2.f;
+    float val = 0.f;
+    const float slideDur = 0.05f;
+    if (phase <= juce::MathConstants<float>::pi - slideDur) {
+      val = phase / juce::MathConstants<float>::pi;
+    } else {
+      val = (((juce::MathConstants<float>::pi - phase) / slideDur) - 0.5f) * 2.f;
+    }
+
+    val = (val - 0.5f)*2.f;
+
+    //std::cout << val << std::endl;
+    return val;
+    //return -phase / juce::MathConstants<float>::twoPi * 2.f;
+
   }
 
   void updateLfoWaveform() {
-      if (currentLfo != lfoToSet) {
-        lfoTransitionSmoother.setCurrentAndTargetValue(getNextLfoValue());
+    if (currentLfo != lfoToSet) {
+      lfoTransitionSmoother.setCurrentAndTargetValue(getNextLfoValue());
 
-        currentLfo = lfoToSet;
+      currentLfo = lfoToSet;
 
-        lfoTransitionSmoother.setTargetValue(getNextLfoValue());
-      }
+      lfoTransitionSmoother.setTargetValue(getNextLfoValue());
+    }
   }
 
-//  void updateGlobalGain() {
-//    if (abs(globalGain - globalGainToSet) > 0.001) {
-//      gainTransitionSmoother.setCurrentAndTargetValue(globalGain);
-//
-//      gainTransitionSmoother.setTargetValue(globalGainToSet);
-//    } else {
-//      globalGain = globalGainToSet;
-//    }
-//
-//  }
+  void updateParameterSmoothing(juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>& smoothedParameter, float& current, float& target) {
+    if (abs(current - target) > 0.001f) {
+      smoothedParameter.setCurrentAndTargetValue(current);
+
+      current = target;
+
+      smoothedParameter.setTargetValue(target);
+    }
+  }
 
   std::array<juce::dsp::Oscillator<float>, 4u> lfos
   {
@@ -146,17 +182,20 @@ private:
     juce::dsp::Oscillator<float>{triangle},
     juce::dsp::Oscillator<float>{square},
     juce::dsp::Oscillator<float>{saw}
-
   };
 
   LfoWaveform currentLfo = LfoWaveform::sine;
   LfoWaveform lfoToSet = currentLfo;
 
-  float globalGain = 1.f;
-  float globalGainToSet = globalGain;
+  float gainValue = 1.f;
+  float currentGain, globalGainToSet = gainValue;
+
+  float depthValue = 0.4f;
+  float currentDepth, globalDepthToSet = depthValue;
 
   juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> lfoTransitionSmoother{0.f};
-  juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainTransitionSmoother{0.f};
+  juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainTransitionSmoother{1.f};
+  juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> depthTransitionSmoother{0.4f};
 
 };
 }  // namespace tremolo
