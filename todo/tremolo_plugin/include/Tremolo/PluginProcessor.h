@@ -35,6 +35,10 @@ public:
 
   juce::AudioProcessorParameter* getBypassParameter() const override;
 
+  Parameters& getParameterRefs() noexcept {
+      return parameters;
+  }
+
 private:
   // TODO: add parameters
 
