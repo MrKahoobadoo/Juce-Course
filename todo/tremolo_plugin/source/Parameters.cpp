@@ -83,8 +83,8 @@ Parameters::Parameters(juce::AudioProcessor& processor)
   : rate{createModulationRateParameter(processor)},
   gain{createGainParameter(processor)},
   depth{createDepthParameter(processor)},
-  bypassed{createBypassedParameter(processor)},
-  waveform{createWaveformParameter(processor)}
+  waveform{createWaveformParameter(processor)},
+  bypassed{createBypassedParameter(processor)}
 {
 }
 }  // namespace tremolo
