@@ -135,7 +135,8 @@ bool PluginProcessor::hasEditor() const {
 
 // This function will be called to create an instance of the editor
 juce::AudioProcessorEditor* PluginProcessor::createEditor() {
-  return new juce::GenericAudioProcessorEditor(*this);
+  //return new juce::GenericAudioProcessorEditor(*this); // for default editor
+  return new PluginEditor(*this);
 }
 
 void PluginProcessor::getStateInformation(juce::MemoryBlock& destData) {

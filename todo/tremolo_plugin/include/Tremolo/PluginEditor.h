@@ -9,7 +9,10 @@ public:
 
 private:
   juce::ImageComponent background;
+
   juce::ImageComponent logo;
+
+  LfoVisualizer lfoVisualizer;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 };

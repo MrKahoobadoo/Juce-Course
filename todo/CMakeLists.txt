@@ -106,6 +106,7 @@ juce_add_binary_data(tremolo_plugin_assets
   SOURCES
     assets/Background.png
     assets/Logo.png
+    assets/Chicken_Tremolo_Logo.png
     # TODO: Add custom font files
 )
 
